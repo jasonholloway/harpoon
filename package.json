@@ -1,15 +1,15 @@
 {
   "name": "harpoon",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "",
-  "main": "index.js",
+  "main": "out/index.js",
   "directories": {
     "test": "test"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Jason Holloway",
   "license": "ISC",
   "dependencies": {
     "aws-sdk": "^2.562.0",
