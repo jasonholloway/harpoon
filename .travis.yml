@@ -1,0 +1,12 @@
+language: node_js
+
+node_js:
+- 14
+
+script: make publish
+
+env:
+  global: 
+    #NPM_TOKEN=...
+    - secure: ZBrMCctOX6WaoswFxHqEbv/M4+touP0ytESQngf6kuct/MA8J/KwCtkKQP0KU9QdkAte3py3Fr6Ug1Vt0dZRFCvybWo5xt6+Abtm096n+J7gM1lDSAb4JRywnsIqtNtKGzDHX0ilny018ED2kql01VN44x5xuXcrjpexPlpwWK5PPZa7iNT1vE+mhtbioRwIDZXXkgLc+coKLw98uW0fibNx1jEi1U9vRvKc2rbNe/tDS2vMIQKhjgUfsLx/WFNcc7+qR+odsrNC5mK5AVzG3/yGGa40TA7eS3hCdeTXKq7281wsaTRt1c9x52C+Sfz5SI94LkF8Gs2qj8j4Wsd5PAlz4vvbfvxORBsvOI8RuhkorfJNVaqS7nLQOKcd9cne3hvfkN+HMXAJBDchHCHxZR/N9M0rugbnme4mBiduI7plOMSby50NuWnLCDHrMToUvHwmJVLuD2NolGN7aOZl7+1jfXmn6Z1DYOxLJasNUgj5C9+QMlVoPElq9GSMVYF8CaOq4r/InsrhGypEb2Epqh/tuB+pvEugeV92B+0Qxw+zR7VDWki33Xfa6x3+ERDccOdLzVRh9PsnLqVlD3tI+4fxTQhmWXE4ytxwwGqgEGmuHcqgOfYPBTUCsVIOcgwJJRIDX1d69TtCkkRep7pjccYVwhmQ0GUPhB03wqTuRfM=
+
