@@ -1,9 +1,10 @@
-import { Run, LoaderFac } from "../Run";
+import { Run, LoaderFac, Phase } from 'kharai'
 import { harpoon, Harpoon } from "./Harpoon";
-import { Phase } from "../lib";
 
-
-const loader: LoaderFac<Phase<Harpoon>> = x => id => Promise.resolve([x.head(), ['$boot', []]]);
+const loader: LoaderFac<Phase<Harpoon>> =
+	x => ids => Promise.resolve(
+		ids.toMap().map(_ => [x.head(), ['$boot', []]])
+	);
 
 const run = new Run(harpoon(), loader);
 
