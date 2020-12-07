@@ -1,16 +1,24 @@
-import { Run, LoaderFac, Phase } from 'kharai'
+import { Phase, Loader, newRun, FakeStore, MonoidData } from 'kharai'
 import { harpoon, Harpoon } from "./Harpoon";
 
-const loader: LoaderFac<Phase<Harpoon>> =
-	x => ids => Promise.resolve(
-		ids.toMap().map(_ => [x.head(), ['$boot', []]])
+const loader: Loader<Phase<Harpoon>> =
+	ids => Promise.resolve(
+		ids.toMap().map(_ => ['$boot', []])
 	);
 
-const run = new Run(harpoon(), loader);
+const MD = new MonoidData()
 
-run.boot('fetcher', ['fetcher', ['download', []]])
+const store = new FakeStore(MD, 10);
 
-run.boot('differ', ['differ', ['watchFiles', []]])
+(async () => {
+	const run = newRun(harpoon(), loader, { store, threshold: 10 });
 
-//above should be loaded rather than booted
-//or even - booted if unloadable
+	run.log$.subscribe(l => console.log(l[0], l[1]));
+	setInterval(() => console.log('BATCHES', store.batches.length), 3000)
+
+	await Promise.all([
+		run.boot('fetcher', ['fetcher', ['start', []]]),
+		run.boot('differ', ['differ', ['start', []]])
+	]);
+})();
+
