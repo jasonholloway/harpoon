@@ -1,7 +1,6 @@
 import { World, SpecWorld, Phase, makeWorld, bootPhase, endPhase, waitPhase } from 'kharai'
-import { takeWhile, tap } from 'rxjs/operators'
-import { when, _, A, B, then, end, P } from 'ex-patterns'
-import { is, is, Num, Str } from './checkType'
+import { filter, first, takeWhile, tap } from 'rxjs/operators'
+import { Any, Bool, Guard, Num, Str } from './Guard'
 
 export type THarpoon<Me extends World = World> = SpecWorld<{
   $boot: []
@@ -44,21 +43,21 @@ export const harpoon = () => makeWorld<Harpoon>()(
 
 			fetcher: {
 				start: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 						return ['download', []];
 					}
 				}),
 				
 				download: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 						return ['$wait', [2000, ['fetcher', ['download', []]]]];
 					}
 				}),
 
 				getCookie: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 						return ['download', []]
 					}
@@ -68,22 +67,19 @@ export const harpoon = () => makeWorld<Harpoon>()(
 
 			differ: {
 				start: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 						return ['watchFiles', []];
 					}
 				}),
 
 				watchFiles: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 
-						await x.watch(['fetcher']).pipe( //wait until the file count exceeds our index
-							tap(l => console.log('SEEN:', l[0], l[1])),
-							takeWhile(([,p]) => when(p)
-												(['fetcher', [P, _]], ({ P }) => { console.log(P); return false; })
-												(_, then(() => true))
-												(end))
+						const q = await x.watch(['fetcher']).pipe( //wait until the file count exceeds our index
+							filter(Guard(['fetcher', ['download', []]] as const)),
+							first()
 						).toPromise();
 						
 						return ['diffFiles', []]
@@ -95,7 +91,7 @@ export const harpoon = () => makeWorld<Harpoon>()(
 				//
 
 				diffFiles: x => ({
-					guard(d): d is [] { return true },
+					guard: Guard([]),
 					async run() {
 
 						await x.convene(['membersLog:1234'], {
@@ -112,14 +108,14 @@ export const harpoon = () => makeWorld<Harpoon>()(
 			},
 
 			membersList: x => ({
-				guard: is([Num, Str] as const),
+				guard: Guard([Num, Str] as const),
 				async run() {
 					return false;
 				}
 			}),
 
 			membersLog: x => ({
-				guard(d): d is [any] { return true },
+				guard: Guard([Num]),
 				async run() {
 					return false;
 				}
