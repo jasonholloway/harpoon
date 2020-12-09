@@ -1,4 +1,5 @@
-import { Bool, Guard, match as m, Num, Str } from '../src/Guard'
+import { isString } from 'util'
+import { Bool, Guard, match as m, match, Num, Str } from '../src/Guard'
 import { tryMatch as test } from './helpers'
 
 describe('match' , () => {
@@ -196,6 +197,35 @@ describe('match' , () => {
         [true, [123]]
       ]
     })
+  })
+
+  describe('embedded guards', () => {
+
+    test({
+      pattern: [Guard(123)],
+      yes: [
+        [123]
+      ],
+      no: [
+        [],
+        [222],
+        123
+      ]
+    })
+
+    test({
+      pattern: [isString],
+      yes: [
+        ['hello']
+      ],
+      no: [
+        [],
+        [undefined],
+        [222],
+        123
+      ]
+    })
+
   })
 
 })
