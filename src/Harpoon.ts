@@ -1,6 +1,40 @@
 import { World, SpecWorld, Phase, makeWorld, bootPhase, endPhase, waitPhase } from 'kharai'
-import { filter, first, takeWhile, tap } from 'rxjs/operators'
+import { filter, first, map, takeWhile, tap } from 'rxjs/operators'
 import { Any, Bool, Guard, Num, Str } from './Guard'
+import createMeetup from './behaviour/meetup'
+import { Config } from './config'
+import { BlobStore } from './db/BlobStore'
+
+
+type FetcherState = {
+	fileCursor: number,
+	cookie?: string,
+	lastLoginAttempt?: number
+}
+
+const isFetcherState =
+	Guard(
+		{
+			fileCursor: Num
+		} as const
+	).to<FetcherState>();
+
+
+type DifferState = {
+  fileCursor: number,
+  updateCursor: number,
+	logCursor: number
+}
+
+const isDifferState =
+	Guard(
+		{
+			fileCursor: Num,
+			updateCursor: Num,
+			logCursor: Num
+		} as const
+	).to<DifferState>();
+
 
 export type THarpoon<Me extends World = World> = SpecWorld<{
   $boot: []
@@ -8,15 +42,13 @@ export type THarpoon<Me extends World = World> = SpecWorld<{
   $wait: [number, Phase<Me>]
 
 	fetcher: {
-		start: []
-		download: []
-		getCookie: []
+		download: [FetcherState]
+		getCookie: [FetcherState]
 	}
 
 	differ: {
-		start: []
-		watchFiles: [],
-		diffFiles: []
+		watchFiles: [DifferState]
+		diffFiles: [DifferState]
 	}
 
 	membersList: [number, string]
@@ -26,11 +58,11 @@ export type THarpoon<Me extends World = World> = SpecWorld<{
 
 export type Harpoon = THarpoon<THarpoon>
 
-export const harpoon = () => makeWorld<Harpoon>()(
+export const harpoon = (o: { config: Config, blobs: BlobStore }) => makeWorld<Harpoon>()(
 	{
 		contextFac: x => ({
 			...x,
-			blah: 3
+			meetup: () => createMeetup(o.config, o.blobs)
 		}),
 	},
 	{
@@ -40,59 +72,75 @@ export const harpoon = () => makeWorld<Harpoon>()(
 			$end: endPhase(),
 			$wait: waitPhase(),
 
-
 			fetcher: {
-				start: x => ({
-					guard: Guard([]),
-					async run() {
-						return ['download', []];
-					}
-				}),
 				
 				download: x => ({
-					guard: Guard([]),
-					async run() {
-						return ['$wait', [2000, ['fetcher', ['download', []]]]];
+					guard: Guard([isFetcherState]),
+					async run([state]) {
+						const { fileCursor, cookie } = state;
+
+            if(!cookie) {
+							return ['getCookie', [state]]; //need to pass cursor here
+            }
+
+            await x.meetup().getMembers(cookie, fileCursor);
+						
+						const oneHour = 1000 * 60 * 60;
+						const now = Date.now();
+
+						//add weight to save here
+
+						return ['$wait', [now + oneHour,
+															['fetcher', ['download', [{
+																 ...state,
+																 fileCursor: fileCursor + 1
+															 }]]]]];
 					}
 				}),
 
 				getCookie: x => ({
-					guard: Guard([]),
-					async run() {
-						return ['download', []]
+					guard: Guard([isFetcherState]),
+					async run([state]) {
+            const { lastLoginAttempt } = state;
+
+						const oneHour = 1000 * 60 * 60;
+						const now = Date.now();
+
+            if(lastLoginAttempt && now < (lastLoginAttempt + oneHour)) {
+              return ['$wait', [now + oneHour,
+																['fetcher', ['getCookie', [state]]]]];
+            }
+            else {
+							const cookie = await x.meetup().getCookie(); //and failure???
+
+							return ['download', [{ ...state, cookie }]]
+            }
 					}
 				})
 			},
 
 
 			differ: {
-				start: x => ({
-					guard: Guard([]),
-					async run() {
-						return ['watchFiles', []];
-					}
-				}),
 
 				watchFiles: x => ({
-					guard: Guard([]),
-					async run() {
+					guard: Guard([isDifferState]),
+					async run([state]) {
+						const { fileCursor } = state;
 
-						const q = await x.watch(['fetcher']).pipe( //wait until the file count exceeds our index
-							filter(Guard(['fetcher', ['download', []]] as const)),
+						const q = await x.watch(['fetcher']).pipe(
+							filter(Guard(['fetcher', ['download', [isFetcherState]]] as const)), //should nicely type arg too
+							map(([,[,[other]]]) => other),
+							filter(other => other.fileCursor > fileCursor),
 							first()
 						).toPromise();
 						
-						return ['diffFiles', []]
+						return ['diffFiles', [state]]
 					}
 				}),
 
-				//having bumped our index, now we do the outstanding work below until we run short
-				//
-				//
-
 				diffFiles: x => ({
-					guard: Guard([]),
-					async run() {
+					guard: Guard([isDifferState]),
+					async run([state]) {
 
 						await x.convene(['membersLog:1234'], {
 							convene([p]) {
@@ -102,7 +150,7 @@ export const harpoon = () => makeWorld<Harpoon>()(
 						});
 
 						
-						return ['watchFiles', []]
+						return ['watchFiles', [state]]
 					}
 				})
 			},
