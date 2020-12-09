@@ -1,4 +1,4 @@
-import { isArray, isBoolean, isFunction, isNumber, isRegExp, isString } from "util"
+import { isArray, isBoolean, isFunction, isNumber, isObject, isRegExp, isString } from "util"
 import { inspect } from 'util'
 
 const log = (x: any) => console.log(inspect(x), { depth: 5 })
@@ -62,6 +62,15 @@ export function match(s: any, v: any) {
 
   if(isFunction(s)) {
     return s(v);
+  }
+
+  if(isObject(s) && isObject(v)) {
+    for(const [sk, sv] of Object.entries(s)) {
+      const r = match(sv, v[sk]);
+      if(!r) return false;
+    }
+    
+    return true;
   }
 
   switch(s) {

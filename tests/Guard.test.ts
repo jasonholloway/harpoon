@@ -228,4 +228,44 @@ describe('match' , () => {
 
   })
 
+  describe('maps', () => {
+
+    test({
+      pattern: {},
+      yes: [
+        {},
+        { hello: 123 },
+      ],
+      no: [
+        undefined
+      ]
+    })
+
+    test({
+      pattern: { woo: 99 },
+      yes: [
+        { woo: 99 },
+        { woo: 99, blah: 123 }
+      ],
+      no: [
+        {},
+        { blah: 99 },
+        { woo: 98 },
+        undefined
+      ]
+    })
+
+    test({
+      pattern: [{ yo: [1] }],
+      yes: [
+        [{ yo: [1] }],
+        [{ yo: [1], moo: 123 }]
+      ],
+      no: [
+        [{ yo: [2] }],
+      ]
+    })
+
+  })
+
 })
