@@ -2,6 +2,19 @@ import { isString } from 'util'
 import { Bool, Guard, match as m, match, Num, Str } from '../src/Guard'
 import { tryMatch as test } from './helpers'
 
+describe('Guards', () => {
+
+  it('can check type at compile-time via \'to\'', () => {
+    Guard(Num).to<number>();
+    Guard(Num).to<123>();
+    Guard([Num] as const).to<[number]>();
+    Guard([Num] as const).to<[123]>();
+    Guard({ n: Num } as const).to<{ n: number }>();
+    Guard({ n: Num } as const).to<{ n: 123 }>();
+  })
+  
+})
+
 describe('match' , () => {
 
   test({
