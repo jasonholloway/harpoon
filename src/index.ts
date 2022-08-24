@@ -1,26 +1,79 @@
 import fs from 'fs'
-import { act, LocalStore, newRun, World} from 'kharai'
+import { act, LocalStore, newRun, World, Num, Tup} from 'kharai'
 import axios from 'axios'
 import { load as cheerio } from 'cheerio'
+import { isArray, isObject } from 'node:util';
+import { delay } from 'kharai/out/src/util';
 
 const world = World
   .shape({
+    scrape: act(Tup(Num,Num)),
 
-    scrape: act()
+    handle: act(),
 
+    index: act()
   })
   .impl({
 
-    async scrape({and}) {
-      const resp = await axios.get('https://ao.com/l/fridges-free_standing/1-9/29-30/');
+    async scrape({and,convene}, [offset, size]) {
+
+      await delay(2000);
+
+      const resp = await axios.get(`https://ao.com/l/refrigerators/1/29/?page=${offset}&pagesize=${size}`);
       const $ = cheerio(resp.data);
 
-      const dataRaw = $('#lister-data').text();;
-      const data = JSON.parse(dataRaw);
+      const found = $('#lister-data');
 
-      fs.writeFileSync('ao0.json', dataRaw);
+      if(found.length) {
+        const data = JSON.parse(found.text());
 
-      return and.end(data);
+        if(!hasProp('Products')(data)) {
+          return and.end(['bad data', data]);
+        }
+
+        const r = await convene(['h:page'], ([p]) => {
+          return p.chat(data.Products);
+        }) || [];
+
+        const [newEvidence] = r;
+
+        await convene(['index'], ([p]) => {
+          //if this was proper orchestration a failure below would lead us to stow the data locally till we could pass it on
+          p.chat(newEvidence);
+        });
+
+        return and.wait([10000, and.scrape([offset+size, size])]);
+      }
+      else {
+        return and.wait([10000, and.scrape([0, size])]);
+      }
+    },
+
+
+    async handle({and,attend,id}) {
+      await attend(m => {
+
+        console.log('handling', id, m);
+        
+        switch(id) {
+          case 'h:page':
+            if(isArray(m)) {
+              const codes = m.flatMap(p => hasProp('Code')(p) ? [p.Code] : []);
+              return [,codes];
+            }
+        }
+      });
+
+      return and.handle();
+    },
+
+
+    async index({and,attend}) {
+      const [m] = (await attend(m => [m]) || []);
+
+      fs.writeFileSync('index.raw', JSON.stringify(m));
+
+      return and.index();
     }
 
   })
@@ -32,9 +85,16 @@ const x = newRun(world, store, store, { save: true });
 
 Promise.all([
   x.log$,
-  x.boot('ao', ['scrape'])
+  x.boot('ao', ['scrape', [0,5]]),
+  x.boot('h:page', ['handle']),
+  x.boot('index', ['index'])
 ]);
 
+
+
+function hasProp<P extends string>(prop: P): ((o: unknown) => o is { [k in P]: unknown }) {
+  return <any>((o: unknown) => typeof o === 'object' && (<any>o)[prop] !== undefined);
+}
 
 
 // function agent(setup?: superagent.Plugin) {

@@ -194,3 +194,52 @@ So every index should be two ways: items can be removed and readded
 We would need some way of retriggering scraped data into the evidence pipeline
 not so bad if we have a registry of Fridges
 
+----------
+
+So even a product list page is evidence, and could be delegated to well-known mappers
+AO:FridgeListFragment
+
+But - there's no reliably stable ordering to the list
+so we'd have to capture the entire lot
+to work out inclusions and exlusions
+though keeping a fridge too long isn't the end of the world
+
+if we have no nice ordered list (this must be a common situation)
+then we can do a kind of ttl thing
+if we haven't seen any sign of a particular fridge for a bit
+it falls out of the index on next frisk
+
+---------
+
+So the page scrapers don't remember what was on the page before
+they feed their entire list to the central index
+
+the central index just receives then these full pages
+but - the single page scrapers should map? or, well, no...
+they provide evidence
+
+but only after it's been unified surely
+so the percolation of evidence happens on an object-by-object basis
+though a page is evidence
+of a certain type, that we want to publish into the system of handlers
+
+---------
+
+So stateful tracking of a thing requires an object
+The overall index of pages is itself an object
+We could track each page as an object, if we fancied caching them that way
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
