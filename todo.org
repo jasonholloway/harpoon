@@ -1,0 +1,31 @@
+* TODO!
+
+** DONE sideband, per-run transient data per machine
+
+*** would enable worker pools
+
+** TODO setup Squid
+
+*** lets us try out scraper pipeline
+
+** TODO binary blob entries
+
+*** data monoids would need extending
+
+*** processing done by store?
+
+*** feels like should be done before actual persistance layer
+
+**** store would then receive [id, data], where data is either a serialized json string, or binary buffer
+
+** TODO local ands
+
+** TODO close down cleanly
+
+** TODO get wait working
+
+** TODO relative sleep
+
+** TODO comms contracts
+
+** TODO enforce types on load

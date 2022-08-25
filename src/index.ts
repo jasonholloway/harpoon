@@ -1,17 +1,32 @@
-import fs from 'fs'
-import { act, LocalStore, newRun, World, Num, Tup} from 'kharai'
+import { act, LocalStore, newRun, World, Num, Tup, Many, Str, Guard, Any } from 'kharai'
 import axios from 'axios'
 import { load as cheerio } from 'cheerio'
 import { isArray, isObject } from 'node:util';
 import { delay } from 'kharai/out/src/util';
+import { Set } from 'immutable'
+import { Or } from 'kharai/out/src/guards/Guard';
+import { take } from 'rxjs/operators'
 
 const world = World
   .shape({
     scrape: act(Tup(Num,Num)),
 
+    percolate: {
+      pool: {
+        start: act(),
+        run: act(Many(Str)) // AgentId[]
+      },
+
+      agent: {
+        take: act(),
+        work: act(Tup(Str,Any)), // [EvidenceType,Evidence]
+        finish: act()
+      }
+    },
+
     handle: act(),
 
-    index: act()
+    index: act(Many(Str))
   })
   .impl({
 
@@ -28,14 +43,10 @@ const world = World
         const data = JSON.parse(found.text());
 
         if(!hasProp('Products')(data)) {
-          return and.end(['bad data', data]);
+          return and.end(['BADDATA', data]);
         }
 
-        const r = await convene(['h:page'], ([p]) => {
-          return p.chat(data.Products);
-        }) || [];
-
-        const [newEvidence] = r;
+        const [newEvidence] = await convene(['h:page'], ([p]) => p.chat(data.Products)) || [];
 
         await convene(['index'], ([p]) => {
           //if this was proper orchestration a failure below would lead us to stow the data locally till we could pass it on
@@ -49,6 +60,82 @@ const world = World
       }
     },
 
+    percolate: {
+      pool: {
+        async start({and}) {
+          return and.percolate.pool.run([]);
+        },
+        
+        async run({and,attend,watch,isFresh}, ids) {
+          if(isFresh()) {
+            await watch(ids)
+              .pipe(take(0))
+              .toPromise(); //think this will summon?!?!?
+          }
+          
+          const [op] = await attend(m => {
+            if(Guard(Tup(Or('reg' as const, 'dereg' as const),Str))(m)) {
+              return [m, true];
+            }
+            else {
+              return [, false];
+            }
+          }) || [];
+
+          if(op) {
+            switch(op[0]) {
+              case 'reg':
+                return and.percolate.pool.run(Set(ids).union([op[1]]).toArray());
+              case 'dereg':
+                return and.percolate.pool.run(Set(ids).remove(op[1]).toArray());
+            }
+          }
+          
+          return and.percolate.pool.run(ids);
+        }
+
+        //next question is: how do the agents re-enlivened on restart?
+        //simple: they get summoned
+        //as soon as run gets called
+        //then we summon them
+        //but how do we know we've started up?
+        //need some secret sideband data...
+      },
+
+      agent: {
+        async take({and,attend,convene,id}) {
+
+          //receive some evidence
+          const [ev] = await attend(m => ['']) || [];
+
+          //anchor, guarantee safety
+          await convene(['pool'], ([p]) => {
+            p.chat(['reg',id]);
+          });
+
+          //step into task
+          return and.percolate.agent.work(['',ev]);
+        },
+
+        async work({and}, [evType,ev]) {
+
+          //if more to do, continue
+
+          //if done, pass to sink
+          
+          return and.percolate.agent.finish();
+        },
+
+        async finish({and,convene,id}) {
+          await convene(['pool'], ([p]) => {
+            p.chat(['dereg',id]);
+          });
+
+          return and.percolate.agent.take();
+        }
+        
+      }
+    },
 
     async handle({and,attend,id}) {
       await attend(m => {
@@ -68,12 +155,29 @@ const world = World
     },
 
 
-    async index({and,attend}) {
-      const [m] = (await attend(m => [m]) || []);
+    async index({and,attend}, data) {
+      const [m] = await attend(m => [m]) || [];
 
-      fs.writeFileSync('index.raw', JSON.stringify(m));
+      if(Guard(Many(Str))(m)) {
+        //new fridges to be detected here
+        //each new fridge should then be farmed out 
+        //to a stateful, fridge-specific machine
+        //or, maybe each fridge, whether new or not,
+        //should go to such an aggregator
 
-      return and.index();
+        //then that machine will be responsible for detecting differences
+        //though here we have the same old evidence mechanism
+        //the fridge is provided as evidence
+        //and is split up 
+        
+        //
+        //
+        //
+        
+        return and.index([...Set.union<string>([data, m])]);
+      }
+
+      return and.index(data);
     }
 
   })
@@ -87,9 +191,8 @@ Promise.all([
   x.log$,
   x.boot('ao', ['scrape', [0,5]]),
   x.boot('h:page', ['handle']),
-  x.boot('index', ['index'])
+  x.boot('index', ['index', []])
 ]);
-
 
 
 function hasProp<P extends string>(prop: P): ((o: unknown) => o is { [k in P]: unknown }) {
