@@ -269,8 +269,13 @@ async function searchLinks(indexName: string, query: string[]): Promise<Link[]> 
 }
 
 function renderLinks(res: ServerResponse, links: Link[]) {
+  if(links.length == 1) {
+    res.writeHead(301, undefined, { 'Location': links[0].url });
+    res.end();
+    return;
+  }
+  
   res.writeHead(200, undefined, { 'Content-Type': 'text/html' });
-
   res.write('<!DOCTYPE html><html><style>li { font-size: 20px; margin: 5px; }</style><ul>');
 
   for(const link of links) {
@@ -278,7 +283,6 @@ function renderLinks(res: ServerResponse, links: Link[]) {
   }
 
   res.write('</ul></html>');
-  
   res.end();
 }
 
