@@ -1,7 +1,7 @@
 {
-  "name": "fridges",
-  "version": "0.2.0",
-  "description": "Lots of lovely fridges",
+  "name": "harpoon",
+  "version": "0.1.0",
+  "description": "Spearing protype",
   "main": "out/src/index.js",
   "types": "out/src/index.d.ts",
   "files": [
@@ -15,16 +15,18 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.27.2",
+    "azure-devops-node-api": "^14.1.0",
     "cheerio": "^1.0.0-rc.12",
     "immutable": "^4.1.0",
     "rxjs": "^6.6.7",
-    "superagent": "^8.0.0"
+    "superagent": "^8.0.0",
+    "ts-pattern": "^5.5.0"
   },
   "devDependencies": {
     "@types/jest": "^27.4.0",
-    "@types/node": "^16.6.2",
+    "@types/node": "^16.18.115",
     "@types/superagent": "^4.1.15",
     "jest": "^27.4.0",
-    "typescript": "^4.7.4"
+    "typescript": "^5.6.3"
   }
 }

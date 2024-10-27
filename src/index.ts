@@ -1,219 +1,287 @@
-import { act, LocalStore, newRun, World, Num, Tup, Many, Str, Guard, Any } from 'kharai'
-import axios from 'axios'
-import { load as cheerio } from 'cheerio'
-import { isArray, isObject } from 'node:util';
-import { delay } from 'kharai/out/src/util';
-import { Set } from 'immutable'
-import { Or } from 'kharai/out/src/guards/Guard';
-import { take } from 'rxjs/operators'
+import { newRun, World, Str, Num, Any, Many, LocalStore } from 'kharai'
+import FakeStore from 'kharai/out/src/FakeStore';
+import { act, root } from 'kharai/out/src/shape/common';
+import { delay, isString } from 'kharai/out/src/util';
+import http, { ServerResponse } from "http";
+import { isArray } from 'util';
+import { match, P } from 'ts-pattern';
+import { Call } from 'kharai/out/src/SimpleCall';
+import * as azdo from 'azure-devops-node-api';
+import { Dict, Or } from 'kharai/out/src/guards/Guard';
+
+const IndexAdd = Call([Str, Str], true);
+const IndexDump = Call([], Any);
+const IndexLookup = Call([Many(Str)], Many(Str));
+
+const LinkGet = Call([], { name: Str, url: Str });
+
+const RepoId = Str;
+const RepoState = { id: Str, name: Str, url: Str };
+const RepoPut = Call([RepoState], true);
+const RepoGet = Call([], RepoState);
+
+const PipelineId = Str;
+const PipelineState = { id: Str, name: Str, url: Str };
+const PipelinePut = Call([PipelineState], true);
+const PipelineGet = Call([], PipelineState);
+
+
+const azdoOrgUrl = 'https://dev.azure.com/sortedproapp';
+const azdoProject = 'SortedPRO';
+
+const azdoAuth = azdo.getPersonalAccessTokenHandler(process.env.AZDO_PAT || '');
+const azdoApi = new azdo.WebApi(azdoOrgUrl, azdoAuth)
+
 
 const world = World
   .shape({
-    scrape: act(Tup(Num,Num)),
-
-    percolate: {
-      pool: {
-        start: act(),
-        run: act(Many(Str)) // AgentId[]
-      },
-
-      agent: {
-        take: act(),
-        work: act(Tup(Str,Any)), // [EvidenceType,Evidence]
-        finish: act()
-      }
+    Index: {
+      ...root(Str),
+      serving: act(Dict(Str))
     },
 
-    handle: act(),
+    RepoSpear: {
+      ...root(Str),
+      spearing: act(),
+      stowing: act(Many(RepoState)) 
+    },
+    Repo: {
+      ...root(RepoId),
+      serving: act(RepoState),
+      putting: act([Or(RepoState, false), RepoState])
+    },
 
-    index: act(Many(Str))
+    PipelineSpear: {
+      ...root(Str),
+      spearing: act(),
+      stowing: act(Many(PipelineState)) 
+    },
+    Pipeline: {
+      ...root(PipelineId),
+      serving: act(PipelineState),
+      putting: act([Or(PipelineState, false), PipelineState])
+    }
   })
   .impl({
 
-    async scrape({and,convene}, [offset, size]) {
-
-      await delay(2000);
-
-      const resp = await axios.get(`https://ao.com/l/refrigerators/1/29/?page=${offset}&pagesize=${size}`);
-      const $ = cheerio(resp.data);
-
-      const found = $('#lister-data');
-
-      if(found.length) {
-        const data = JSON.parse(found.text());
-
-        if(!hasProp('Products')(data)) {
-          return and.end(['BADDATA', data]);
-        }
-
-        const [newEvidence] = await convene(['h:page'], ([p]) => p.chat(data.Products)) || [];
-
-        await convene(['index'], ([p]) => {
-          //if this was proper orchestration a failure below would lead us to stow the data locally till we could pass it on
-          p.chat(newEvidence);
-        });
-
-        return and.wait([10000, and.scrape([offset+size, size])]);
-      }
-      else {
-        return and.wait([10000, and.scrape([0, size])]);
-      }
-    },
-
-    percolate: {
-      pool: {
-        async start({and}) {
-          return and.percolate.pool.run([]);
-        },
-        
-        async run({and,attend,watch,isFresh}, ids) {
-          if(isFresh()) {
-            await watch(ids)
-              .pipe(take(0))
-              .toPromise(); //think this will summon?!?!?
-          }
-          
-          const [op] = await attend(m => {
-            if(Guard(Tup(Or('reg' as const, 'dereg' as const),Str))(m)) {
-              return [m, true];
-            }
-            else {
-              return [, false];
-            }
-          }) || [];
-
-          if(op) {
-            switch(op[0]) {
-              case 'reg':
-                return and.percolate.pool.run(Set(ids).union([op[1]]).toArray());
-              case 'dereg':
-                return and.percolate.pool.run(Set(ids).remove(op[1]).toArray());
-            }
-          }
-          
-          return and.percolate.pool.run(ids);
-        }
-
-        //next question is: how do the agents re-enlivened on restart?
-        //simple: they get summoned
-        //as soon as run gets called
-        //then we summon them
-        //but how do we know we've started up?
-        //need some secret sideband data...
+    Repo: {
+      act({and,server}) {
+        return server
+          .given(RepoPut, d => [and.putting([false, d]), true])
+          .else(and.skip());
       },
 
-      agent: {
-        async take({and,attend,convene,id}) {
+      async serving({and,server}, data0) {
+        return server
+          .given(RepoPut, d => [and.putting([data0, d]), true])
+          .given(RepoGet, () => [and.serving(data0), data0])
+          .given(LinkGet, () => [and.serving(data0), { name: data0.name, url: data0.url }])
+          .else(and.skip());
+      },
 
-          //receive some evidence
-          const [ev] = await attend(m => ['']) || [];
+      async putting(x, [data0, data1]) {
+        const index = x.ref.Index('repos');
 
-          //anchor, guarantee safety
-          await convene(['pool'], ([p]) => {
-            p.chat(['reg',id]);
-          });
-
-          //step into task
-          return and.percolate.agent.work(['',ev]);
-        },
-
-        async work({and}, [evType,ev]) {
-
-          //if more to do, continue
-
-          //if done, pass to sink
-          
-          return and.percolate.agent.finish();
-        },
-
-        async finish({and,convene,id}) {
-          await convene(['pool'], ([p]) => {
-            p.chat(['dereg',id]);
-          });
-
-          return and.percolate.agent.take();
+        if(await x.meet(index).call(IndexAdd, data1.name, x.id)) {
+          return x.and.serving(data1);
         }
+
+        if(data0) {
+          return x.and.serving(data0);
+        }
+
+        throw 'very badly handled this - don\'t have sufficient data to go anywhere, and have overeagerly received unactionable work';
+      }
+
+    },
+
+    RepoSpear: {
+      async act(x) {
+        return x.and.spearing();
+      },
+
+      async spearing({and}) {
+        const azdoGit = await await azdoApi.getGitApi();
+        const result = await azdoGit.getRepositories(azdoProject);
+
+        const mapped = [...result.values()]
+          .flatMap(v =>
+            v.id && v.name && v.webUrl
+              ? [{ id: v.id, name: v.name, url: v.webUrl }]
+              : []);
         
+        return and.stowing(mapped);
+      },
+
+      async stowing({and,meet,ref}, repos) {
+        if(!repos.length) {
+          return and.wait([Date.now() + (15 * 60 * 1000), and.spearing()]);
+        }
+        else {
+          const [repo, ...rest] = repos;
+
+          await meet(ref.Repo(repo.id)).call(RepoPut, repo);
+
+          return and.stowing(rest);
+        }
       }
     },
 
-    async handle({and,attend,id}) {
-      await attend(m => {
+    Pipeline: {
+      act({and,server}) {
+        return server
+          .given(PipelinePut, d => [and.putting([false, d]), true])
+          .else(and.skip());
+      },
 
-        console.log('handling', id, m);
+      async serving({and,server}, data0) {
+        return server
+          .given(PipelinePut, d => [and.putting([data0, d]), true])
+          .given(PipelineGet, () => [and.serving(data0), data0])
+          .given(LinkGet, () => [and.serving(data0), { name: data0.name, url: data0.url }])
+          .else(and.skip());
+      },
+
+      async putting(x, [data0, data1]) {
+        const index = x.ref.Index('pipelines');
+
+        if(await x.meet(index).call(IndexAdd, data1.name, x.id)) {
+          return x.and.serving(data1);
+        }
+
+        if(data0) {
+          return x.and.serving(data0);
+        }
+
+        throw 'very badly handled this - don\'t have sufficient data to go anywhere, and have overeagerly received unactionable work';
+      }
+    },
+
+    PipelineSpear: {
+      async act(x) {
+        return x.and.spearing();
+      },
+
+      async spearing({and}) {
+        const azdoPipelines = await azdoApi.getPipelinesApi();
+        const result = await azdoPipelines.listPipelines(azdoProject);
+
+        const mapped = [...result.values()]
+          .flatMap(v => {
+            const { id, name } = v;
+            const url = v._links.web?.href;
+
+            return id && name && url
+              ? [{ id: id.toString(), name, url }]
+              : [];
+          });
         
-        switch(id) {
-          case 'h:page':
-            if(isArray(m)) {
-              const codes = m.flatMap(p => hasProp('Code')(p) ? [p.Code] : []);
-              return [,codes];
+        return and.stowing(mapped);
+      },
+
+      async stowing({and,meet,ref}, pipelines) {
+        if(!pipelines.length) {
+          return and.wait([Date.now() + (17 * 60 * 1000), and.spearing()]);
+        }
+        else {
+          const [pipeline, ...rest] = pipelines;
+
+          await meet(ref.Pipeline(pipeline.id)).call(PipelinePut, pipeline);
+
+          return and.stowing(rest);
+        }
+      }
+    },
+    
+    Index: {
+      async act(x) {
+        return x.and.serving({});
+      },
+
+      serving(x, data) {
+        return x.server
+          .given(IndexAdd, (k, v) => [x.and.serving({ ...data, [k.toLowerCase()]: v }), true])
+          .given(IndexDump, () => [x.and.skip(), data])
+          .given(IndexLookup, terms => {
+            let candidates = [...Object.getOwnPropertyNames(data)];
+
+            for(const term of terms) {
+              const matched = [];
+
+              for(const k of candidates) {
+                if(k.includes(term)) {
+                  matched.push(k);
+                }
+              }
+
+              candidates = matched;
             }
-        }
-      });
 
-      return and.handle();
-    },
-
-
-    async index({and,attend}, data) {
-      const [m] = await attend(m => [m]) || [];
-
-      if(Guard(Many(Str))(m)) {
-        //new fridges to be detected here
-        //each new fridge should then be farmed out 
-        //to a stateful, fridge-specific machine
-        //or, maybe each fridge, whether new or not,
-        //should go to such an aggregator
-
-        //then that machine will be responsible for detecting differences
-        //though here we have the same old evidence mechanism
-        //the fridge is provided as evidence
-        //and is split up 
-        
-        //
-        //
-        //
-        
-        return and.index([...Set.union<string>([data, m])]);
-      }
-
-      return and.index(data);
+            const results = candidates.flatMap(k => {
+              const ref = data[k];
+              return ref ? [ref] : [];
+            });
+            
+            return [x.and.skip(), results];
+          })
+          .else(x.and.skip());
+      },
     }
-
   })
   .build();
 
 
-const store = new LocalStore();
-const x = newRun(world, store, store, { save: true });
+const store = new LocalStore('harpoon'); // new FakeStore(10); //LocalStore();
+const run = newRun(world, store, store, { save: true });
 
-Promise.all([
-  x.log$,
-  x.boot('ao', ['scrape', [0,5]]),
-  x.boot('h:page', ['handle']),
-  x.boot('index', ['index', []])
-]);
+run.machineSpace.runArbitrary(async x => {
+  x.summon(x.ref.RepoSpear('spear'));
+})
+
+run.machineSpace.runArbitrary(async x => {
+  x.summon(x.ref.PipelineSpear('spear'));
+})
+
+http.createServer(async (req, res) => {
+  const [path, query] = req.url?.split('?', 2) || [];
+  const queryParts = query?.split('+') || [];
+
+  const links =
+      /\/repos$/.test(path) ? await searchLinks('repos', queryParts)
+    : /\/pipelines$/.test(path) ? await searchLinks('pipelines', queryParts)
+    : [];
+
+  renderLinks(res, links);
+
+}).listen(59992);
 
 
-function hasProp<P extends string>(prop: P): ((o: unknown) => o is { [k in P]: unknown }) {
-  return <any>((o: unknown) => typeof o === 'object' && (<any>o)[prop] !== undefined);
+
+async function searchLinks(indexName: string, query: string[]): Promise<Link[]> {
+  const refs = await run.machineSpace.runArbitrary(x =>
+    x.meet(x.ref.Index(indexName)).call(IndexLookup, query).ok()
+  );
+
+  return await Promise.all(
+    refs.map(ref => run.machineSpace.runArbitrary(x =>
+      x.meet(ref).call(LinkGet).ok()
+    )
+  ));
 }
 
+function renderLinks(res: ServerResponse, links: Link[]) {
+  res.writeHead(200, undefined, { 'Content-Type': 'text/html' });
 
-// function agent(setup?: superagent.Plugin) {
-//   return superagent
-//     .agent()
-//     .use(http => {
-//       http.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8')
-//           .set('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:70.0) Gecko/20100101 Firefox/70.0')
-//           .set('Accept-Language', 'en-US,en;q=0.5')
-//           .set('Accept-Encoding', 'gzip, deflate, br')
-//           .set('Pragma', 'no-cache')
-//           .set('Cache-Control', 'no-cache')
-//           .set('Connection', 'keep-alive')
-//           .set('DNT', '1')
-//           .set('Upgrade-Insecure-Requests', '1');
+  res.write('<!DOCTYPE html><html><style>li { font-size: 20px; margin: 5px; }</style><ul>');
 
-//       if(setup) setup(http);
-//     });
-// }
+  for(const link of links) {
+    res.write(`<li><a href="${link.url}">${link.name}</a></li>`);
+  }
+
+  res.write('</ul></html>');
+  
+  res.end();
+}
+
+type Link = { name: string, url: string };
+
