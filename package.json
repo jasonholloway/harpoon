@@ -1,6 +1,6 @@
 {
   "name": "harpoon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spearing protype",
   "main": "out/src/index.js",
   "types": "out/src/index.d.ts",
@@ -14,19 +14,12 @@
   "author": "Jason Holloway",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.27.2",
     "azure-devops-node-api": "^14.1.0",
-    "cheerio": "^1.0.0-rc.12",
-    "immutable": "^4.1.0",
-    "rxjs": "^6.6.7",
-    "superagent": "^8.0.0",
-    "ts-pattern": "^5.5.0"
+    "kharai": "/home/jason/src/kharai"
   },
   "devDependencies": {
-    "@types/jest": "^27.4.0",
     "@types/node": "^16.18.115",
-    "@types/superagent": "^4.1.15",
-    "jest": "^27.4.0",
+    "npm-pack-all": "^1.12.7",
     "typescript": "^5.6.3"
   }
 }

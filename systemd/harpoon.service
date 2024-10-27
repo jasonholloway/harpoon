@@ -1,0 +1,11 @@
+[Unit]
+Description=Protoype Kharai app for searching AzDo via VimiumC
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/harpoon/env
+ExecStart=%h/.nvm/versions/node/v18.16.0/bin/node /usr/local/apps/harpoon/out/index.js --max-old-space-size=100
+
+[Install]
+WantedBy=default.target

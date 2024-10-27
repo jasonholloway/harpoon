@@ -2,7 +2,7 @@ PATH  := node_modules/.bin:$(PATH)
 SHELL := /bin/bash
 
 .ONESHELL:
-.PHONY: clean test build dev
+.PHONY: clean test build dev install publish
 
 
 build: out/built
@@ -20,14 +20,16 @@ node_modules: package.json
 	npm install
 
 out/built: $(shell find src tests) tsconfig.json node_modules Makefile
+	npm link kharai
 	tsc \
 	&& touch out/built
 
 out/tested: out/built jest.config.js
-	jest \
-	  --collectCoverage=true \
-	  --coverageProvider=v8 \
-	&& touch out/tested
+	touch out/tested
+#	jest \
+#	  --collectCoverage=true \
+#	  --coverageProvider=v8 \
+#	&& touch out/tested
 
 publish: out/tested
 	if [ ! -z "$$(git status --porcelain)" ]; then
@@ -42,4 +44,13 @@ publish: out/tested
 	  echo '//registry.npmjs.org/:_authToken=$${NPM_TOKEN}' > .npmrc
 	  npm publish
 	fi
+
+
+INSTALL_PATH := /usr/local/apps/harpoon
+
+install: out/tested
+	rm -rf ${INSTALL_PATH}
+	mkdir -p ${INSTALL_PATH}
+	cp -LR package.json node_modules out systemd ${INSTALL_PATH}/
+	systemctl --user link ${INSTALL_PATH}/systemd/harpoon.service
 

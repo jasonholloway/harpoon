@@ -1,10 +1,9 @@
-import { newRun, World, Str, Num, Any, Many, LocalStore } from 'kharai'
+import { newRun, World, Str, Any, Many, LocalStore } from 'kharai'
 import FakeStore from 'kharai/out/src/FakeStore';
 import { act, root } from 'kharai/out/src/shape/common';
 import { delay, isString } from 'kharai/out/src/util';
 import http, { ServerResponse } from "http";
 import { isArray } from 'util';
-import { match, P } from 'ts-pattern';
 import { Call } from 'kharai/out/src/SimpleCall';
 import * as azdo from 'azure-devops-node-api';
 import { Dict, Or } from 'kharai/out/src/guards/Guard';
@@ -26,12 +25,12 @@ const PipelinePut = Call([PipelineState], true);
 const PipelineGet = Call([], PipelineState);
 
 
-const azdoOrgUrl = 'https://dev.azure.com/sortedproapp';
-const azdoProject = 'SortedPRO';
+const azdoOrgUrl = `https://dev.azure.com/${process.env.HARPOON_AZDO_ORG}`;
+const azdoProject = process.env.HARPOON_AZDO_PROJ!;
+const azdoPAT = process.env.HARPOON_AZDO_PAT!;
 
-const azdoAuth = azdo.getPersonalAccessTokenHandler(process.env.AZDO_PAT || '');
+const azdoAuth = azdo.getPersonalAccessTokenHandler(azdoPAT);
 const azdoApi = new azdo.WebApi(azdoOrgUrl, azdoAuth)
-
 
 const world = World
   .shape({
